@@ -17,6 +17,7 @@ import frappe.defaults
 import frappe.translate
 from frappe.utils.change_log import get_change_log
 import redis
+import os
 from urllib import unquote
 
 @frappe.whitelist()
@@ -31,7 +32,7 @@ def clear_cache(user=None):
 	cache = frappe.cache()
 
 	groups = ("bootinfo", "user_recent", "user_roles", "user_doc", "lang",
-		"defaults", "user_permissions", "roles")
+		"defaults", "user_permissions", "roles", "home_page")
 
 	if user:
 		for name in groups:
@@ -124,6 +125,8 @@ def get():
 		frappe.get_attr(hook)(bootinfo=bootinfo)
 
 	bootinfo["lang"] = frappe.translate.get_user_lang()
+	bootinfo["dev_server"] = os.environ.get('DEV_SERVER', False)
+	bootinfo["disable_async"] = frappe.conf.disable_async
 	return bootinfo
 
 class Session:
@@ -163,7 +166,7 @@ class Session:
 				"full_name": self.full_name,
 				"user_type": self.user_type,
 				"device": self.device,
-				"session_country": get_geo_ip_country(frappe.local.request_ip)
+				"session_country": get_geo_ip_country(frappe.local.request_ip) if frappe.local.request_ip else None
 			})
 
 		# insert session

@@ -5,6 +5,7 @@ from __future__ import unicode_literals
 import frappe
 from frappe import _
 import frappe.utils
+import frappe.async
 import frappe.sessions
 import frappe.utils.file_manager
 import frappe.desk.form.run_method
@@ -16,6 +17,10 @@ def version():
 
 @frappe.whitelist()
 def ping():
+	return "pong"
+
+@frappe.async.handler
+def async_ping():
 	return "pong"
 
 @frappe.whitelist()
@@ -70,7 +75,7 @@ def handle():
 
 	return build_response("json")
 
-def execute_cmd(cmd):
+def execute_cmd(cmd, async=False):
 	"""execute a request as python module"""
 	for hook in frappe.get_hooks("override_whitelisted_methods", {}).get(cmd, []):
 		# override using the first hook
@@ -78,16 +83,18 @@ def execute_cmd(cmd):
 		break
 
 	method = get_attr(cmd)
+	if async:
+		method = method.queue
 
 	# check if whitelisted
 	if frappe.session['user'] == 'Guest':
 		if (method not in frappe.guest_methods):
 			frappe.msgprint(_("Not permitted"))
-			raise frappe.PermissionError('Not Allowed, %s' % str(method))
+			raise frappe.PermissionError('Not Allowed, {0}'.format(method))
 	else:
 		if not method in frappe.whitelisted:
 			frappe.msgprint(_("Not permitted"))
-			raise frappe.PermissionError('Not Allowed, %s' % str(method))
+			raise frappe.PermissionError('Not Allowed, {0}'.format(method))
 
 	ret = frappe.call(method, **frappe.form_dict)
 
@@ -103,3 +110,15 @@ def get_attr(cmd):
 		method = globals()[cmd]
 	frappe.log("method:" + cmd)
 	return method
+
+
+@frappe.whitelist()
+def get_async_task_status(task_id):
+	from frappe.celery_app import get_celery
+	c = get_celery()
+	a = c.AsyncResult(task_id)
+	frappe.local.response['response'] = a.result
+	return {
+		"state": a.state,
+		"progress": 0
+	}

@@ -273,7 +273,7 @@ _f.Frm.prototype.rename_notify = function(dt, old, name) {
 		return;
 
 	// cleanup
-	if(this && this.opendocs[old]) {
+	if(this && this.opendocs[old] && frappe.meta.docfield_copy[dt]) {
 		// delete docfield copy
 		frappe.meta.docfield_copy[dt][name] = frappe.meta.docfield_copy[dt][old];
 		delete frappe.meta.docfield_copy[dt][old];
@@ -391,8 +391,13 @@ _f.Frm.prototype.refresh = function(docname) {
 		// load the record for the first time, if not loaded (call 'onload')
 		cur_frm.cscript.is_onload = false;
 		if(!this.opendocs[this.docname]) {
+			var me = this;
 			cur_frm.cscript.is_onload = true;
 			this.setnewdoc();
+			$(document).trigger("form-load", [this]);
+			$(this.page.wrapper).on('hide',  function(e) {
+				$(document).trigger("form-unload", [me]);
+			})
 		} else {
 			this.render_form(is_a_different_doc);
 		}
@@ -442,13 +447,13 @@ _f.Frm.prototype.render_form = function(is_a_different_doc) {
 				first.focus();
 			}
 		}
-
 	} else {
 		this.refresh_header(is_a_different_doc);
 	}
 
 	$(cur_frm.wrapper).trigger('render_complete');
 
+	this.layout.show_empty_form_message();
 }
 
 _f.Frm.prototype.refresh_field = function(fname) {
@@ -774,7 +779,7 @@ _f.Frm.prototype.set_footnote = function(txt) {
 
 
 _f.Frm.prototype.add_custom_button = function(label, fn, icon, toolbar_or_class) {
-	this.page.add_inner_button(label, fn);
+	return this.page.add_inner_button(label, fn);
 }
 
 _f.Frm.prototype.clear_custom_buttons = function() {

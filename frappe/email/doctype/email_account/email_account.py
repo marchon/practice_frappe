@@ -15,6 +15,8 @@ import markdown2, re
 from dateutil.relativedelta import relativedelta
 from datetime import datetime, timedelta
 
+class SentEmailInInbox(Exception): pass
+
 class EmailAccount(Document):
 	def autoname(self):
 		"""Set name as `email_account_name` or make title from email id."""
@@ -124,7 +126,10 @@ class EmailAccount(Document):
 			exceptions = []
 			for raw in incoming_mails:
 				try:
-					self.insert_communication(raw)
+					communication = self.insert_communication(raw)
+
+				except SentEmailInInbox:
+					frappe.db.rollback()
 
 				except Exception:
 					frappe.db.rollback()
@@ -132,12 +137,18 @@ class EmailAccount(Document):
 
 				else:
 					frappe.db.commit()
+					communication.notify(attachments=communication._attachments, except_recipient=True)
 
 			if exceptions:
 				raise Exception, frappe.as_json(exceptions)
 
 	def insert_communication(self, raw):
 		email = Email(raw)
+
+		if email.from_email == self.email_id:
+			# gmail shows sent emails in inbox
+			# and we don't want emails sent by us to be pulled back into the system again
+			raise SentEmailInInbox
 
 		communication = frappe.get_doc({
 			"doctype": "Communication",
@@ -156,7 +167,7 @@ class EmailAccount(Document):
 		communication.insert(ignore_permissions = 1)
 
 		# save attachments
-		email.save_attachments_in_doc(communication)
+		communication._attachments = email.save_attachments_in_doc(communication)
 
 		if self.enable_auto_reply and getattr(communication, "is_first", False):
 			self.send_auto_reply(communication, email)
@@ -164,7 +175,8 @@ class EmailAccount(Document):
 		# notify all participants of this thread
 		# convert content to HTML - by default text parts of replies are used.
 		communication.content = markdown2.markdown(communication.content)
-		communication.notify(attachments=email.attachments, except_recipient = True)
+
+		return communication
 
 	def set_thread(self, communication, email):
 		"""Appends communication to parent based on thread ID. Will extract
@@ -225,7 +237,7 @@ class EmailAccount(Document):
 			if parent:
 				parent = frappe.get_doc(self.append_to, parent[0].name)
 
-		if not parent and self.append_to:
+		if not parent and self.append_to and self.append_to!="Communication":
 			# no parent found, but must be tagged
 			# insert parent type doc
 			parent = frappe.new_doc(self.append_to)

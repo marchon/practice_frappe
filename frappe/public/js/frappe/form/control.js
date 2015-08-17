@@ -119,6 +119,16 @@ frappe.ui.form.ControlHTML = frappe.ui.form.Control.extend({
 	},
 	html: function(html) {
 		this.$wrapper.html(html || this.get_content());
+	},
+	set_value: function(html) {
+		if(html.appendTo) {
+			// jquery object
+			html.appendTo(this.$wrapper.empty());
+		} else {
+			// html
+			this.df.options = html;
+			this.html(html);
+		}
 	}
 });
 
@@ -179,6 +189,12 @@ frappe.ui.form.ControlInput = frappe.ui.form.Control.extend({
 				</div>\
 			</div>').appendTo(this.parent);
 		}
+	},
+	toggle_label: function(show) {
+		this.$wrapper.find(".control-label").toggleClass("hide", !show);
+	},
+	toggle_description: function(show) {
+		this.$wrapper.find(".help-box").toggleClass("hide", !show);
 	},
 	set_input_areas: function() {
 		if(this.only_input) {
@@ -637,7 +653,7 @@ frappe.ui.form.ControlButton = frappe.ui.form.ControlData.extend({
 		this.input = this.$input.get(0);
 		this.set_input_attributes();
 		this.has_input = true;
-		this.$wrapper.find(".control-label").addClass("hide");
+		this.toggle_label(false);
 	},
 	onclick: function() {
 		if(this.frm && this.frm.doc) {

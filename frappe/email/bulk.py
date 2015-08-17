@@ -60,6 +60,9 @@ def send(recipients=None, sender=None, subject=None, message=None, reference_doc
 	if reference_doctype and reference_name:
 		unsubscribed = [d.email for d in frappe.db.get_all("Email Unsubscribe", "email",
 			{"reference_doctype": reference_doctype, "reference_name": reference_name})]
+
+		unsubscribed += [d.email for d in frappe.db.get_all("Email Unsubscribe", "email",
+			{"global_unsubscribe": 1})]
 	else:
 		unsubscribed = []
 
@@ -108,14 +111,18 @@ def add(email, sender, subject, formatted, text_content=None,
 	e.insert(ignore_permissions=True)
 
 def check_bulk_limit(recipients):
+	# get count of mails sent this month
 	this_month = frappe.db.sql("""select count(*) from `tabBulk Email` where
-		MONTH(creation)=MONTH(CURDATE())""")[0][0]
+		status='Sent' and MONTH(creation)=MONTH(CURDATE())""")[0][0]
 
+	# if using settings from site_config.json, check bulk limit
 	# No limit for own email settings
 	smtp_server = SMTPServer()
 
-	if smtp_server.email_account and getattr(smtp_server.email_account,
-		"from_site_config", False) or frappe.flags.in_test:
+	if (smtp_server.email_account
+		and getattr(smtp_server.email_account, "from_site_config", False)
+		or frappe.flags.in_test):
+
 		monthly_bulk_mail_limit = frappe.conf.get('monthly_bulk_mail_limit') or 500
 
 		if (this_month + len(recipients)) > monthly_bulk_mail_limit:
@@ -155,14 +162,19 @@ def unsubscribe(doctype, name, email):
 	if not verify_request():
 		return
 
-	frappe.get_doc({
-		"doctype": "Email Unsubscribe",
-		"email": email,
-		"reference_doctype": doctype,
-		"reference_name": name
-	}).insert(ignore_permissions=True)
+	try:
+		frappe.get_doc({
+			"doctype": "Email Unsubscribe",
+			"email": email,
+			"reference_doctype": doctype,
+			"reference_name": name
+		}).insert(ignore_permissions=True)
 
-	frappe.db.commit()
+	except frappe.DuplicateEntryError:
+		frappe.db.rollback()
+
+	else:
+		frappe.db.commit()
 
 	return_unsubscribed_page(email, doctype, name)
 
@@ -174,6 +186,9 @@ def flush(from_test=False):
 	smtpserver = SMTPServer()
 
 	auto_commit = not from_test
+
+	# additional check
+	check_bulk_limit([])
 
 	if frappe.flags.mute_emails or frappe.conf.get("mute_emails") or False:
 		msgprint(_("Emails are muted"))
@@ -211,6 +226,6 @@ def flush(from_test=False):
 				where name=%s""", (unicode(e), email["name"]), auto_commit=auto_commit)
 
 def clear_outbox():
-	"""remove mails older than 30 days in Outbox"""
+	"""Remove mails older than 31 days in Outbox. Called daily via scheduler."""
 	frappe.db.sql("""delete from `tabBulk Email` where
-		datediff(now(), creation) > 30""")
+		datediff(now(), creation) > 31""")
