@@ -379,6 +379,13 @@ class DatabaseQuery(object):
 			if not group_function_without_group_by:
 				args.order_by = "`tab{0}`.`{1}` {2}".format(self.doctype,
 					meta.get("sort_field") or "modified", meta.get("sort_order") or "desc")
+				# [Multiple Order By]
+				if meta.get("sort_field") and ("," in meta.get("sort_field")):
+					order_by_fields = []
+					for field in meta.get("sort_field").split(","):
+						order_by_fields.append("`tab{0}`.`{1}` {2}".format(self.doctype, field or "modified", meta.get("sort_order") or "desc"))
+					args.order_by = ",".join(order_by_fields)
+				# [Multiple Order By]
 
 				# draft docs always on top
 				if meta.is_submittable:
