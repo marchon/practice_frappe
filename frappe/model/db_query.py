@@ -383,7 +383,12 @@ class DatabaseQuery(object):
 				if meta.get("sort_field") and ("," in meta.get("sort_field")):
 					order_by_fields = []
 					for field in meta.get("sort_field").split(","):
-						order_by_fields.append("`tab{0}`.`{1}` {2}".format(self.doctype, field or "modified", meta.get("sort_order") or "desc"))
+						# check if valid field is provided
+						if field.strip():
+							order_by_fields.append("`tab{0}`.`{1}` {2}".format(self.doctype, 
+													field.strip() or "modified", 
+													meta.get("sort_order") or "desc"))
+
 					args.order_by = ",".join(order_by_fields)
 				# [Multiple Order By]
 
