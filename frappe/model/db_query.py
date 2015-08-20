@@ -385,8 +385,7 @@ class DatabaseQuery(object):
 					for field in meta.get("sort_field").split(","):
 						# check if valid field is provided
 						if field.strip():
-							order_by_fields.append("`tab{0}`.`{1}` {2}".format(self.doctype, 
-													field.strip() or "modified", 
+							order_by_fields.append("`tab{0}`.`{1}` {2}".format(self.doctype, field.strip() or "modified", 
 													meta.get("sort_order") or "desc"))
 
 					args.order_by = ",".join(order_by_fields)
